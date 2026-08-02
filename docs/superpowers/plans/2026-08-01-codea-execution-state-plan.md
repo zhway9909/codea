@@ -13,7 +13,8 @@
 - 状态机制必须在 Task 0 正式执行前完成并提交。
 - 同一时间最多一个 Task 处于 `in_progress`、`blocked` 或 `awaiting_acceptance`。
 - Task 自动验证通过后只能进入 `awaiting_acceptance`，人工确认后才能进入 `completed`。
-- 缺少 Python 3 或 PyYAML 时校验结果为阻塞，不得跳过校验。
+- `verification` 记录命令执行结果，`taskGate` 记录计划验收标准的整体判断，`humanAcceptance` 记录用户明确验收；三者不得混用。
+- 缺少 Python 3 或 PyYAML 时，记录 `verification.status = unable_to_run`，并将 Task 标记为 `blocked`；不得跳过校验。
 - 状态工具不属于 Codea Runtime，不得进入离线发行包。
 - 不修改 Codea V1 的技术架构、Task 顺序或 Phase 0 门禁。
 
@@ -80,7 +81,7 @@ unaccepted["current"]["status"] = "completed"
 unaccepted["tasks"]["0"].update({
     "status": "completed",
     "verificationStatus": "pass",
-    "gateStatus": "pass",
+    "taskGateStatus": "pass",
     "humanAccepted": False,
 })
 (target / "unaccepted-completed.yaml").write_text(yaml.safe_dump(unaccepted, sort_keys=False))
@@ -89,14 +90,19 @@ mismatch = copy.deepcopy(data)
 mismatch["current"]["status"] = "in_progress"
 (target / "current-mismatch.yaml").write_text(yaml.safe_dump(mismatch, sort_keys=False))
 
+acceptance_mismatch = copy.deepcopy(data)
+acceptance_mismatch["humanAcceptance"]["accepted"] = True
+(target / "acceptance-mismatch.yaml").write_text(yaml.safe_dump(acceptance_mismatch, sort_keys=False))
+
 missing_report = copy.deepcopy(data)
 missing_report["current"]["status"] = "completed"
 missing_report["verification"]["status"] = "pass"
-missing_report["gate"].update({"status": "pass", "humanAccepted": True})
+missing_report["taskGate"]["status"] = "pass"
+missing_report["humanAcceptance"]["accepted"] = True
 missing_report["tasks"]["0"].update({
     "status": "completed",
     "verificationStatus": "pass",
-    "gateStatus": "pass",
+    "taskGateStatus": "pass",
     "humanAccepted": True,
 })
 (target / "missing-report.yaml").write_text(yaml.safe_dump(missing_report, sort_keys=False))
@@ -105,6 +111,7 @@ PY
 expect_fail "duplicate active tasks" "$TMP_DIR/duplicate-active.yaml"
 expect_fail "completed without acceptance" "$TMP_DIR/unaccepted-completed.yaml"
 expect_fail "current status mismatch" "$TMP_DIR/current-mismatch.yaml"
+expect_fail "current acceptance mismatch" "$TMP_DIR/acceptance-mismatch.yaml"
 expect_fail "completed without report" "$TMP_DIR/missing-report.yaml"
 
 echo "Execution state validator tests passed."
@@ -141,32 +148,33 @@ verification:
   commands: []
   errorSummary: null
   recoveryAdvice: null
-gate:
-  status: not_run
-  humanAccepted: false
+taskGate:
+  status: not_evaluated
+humanAcceptance:
+  accepted: false
 tasks:
-  "0": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-00.md}
-  "1": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-01.md}
-  "2": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
-  "3": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
-  "4": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
-  "5": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
-  "6": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
-  "7": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-07.md}
-  "8": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-08.md}
-  "9": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-09.md}
-  "10": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
-  "11": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
-  "12": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
-  "13": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
-  "14": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
-  "15": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
-  "16": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
-  "17": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
-  "18": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
-  "19": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
-  "20": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
-  "21": {status: pending, completedSteps: [], verificationStatus: not_run, gateStatus: not_run, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-21.md}
+  "0": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-00.md}
+  "1": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-01.md}
+  "2": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-02.md}
+  "3": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-03.md}
+  "4": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-04.md}
+  "5": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-05.md}
+  "6": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-06.md}
+  "7": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-07.md}
+  "8": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-08.md}
+  "9": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-09.md}
+  "10": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-10.md}
+  "11": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-11.md}
+  "12": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-12.md}
+  "13": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-13.md}
+  "14": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-14.md}
+  "15": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-15.md}
+  "16": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-16.md}
+  "17": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-17.md}
+  "18": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-18.md}
+  "19": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-19.md}
+  "20": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-20.md}
+  "21": {status: pending, completedSteps: [], verificationStatus: not_run, taskGateStatus: not_evaluated, humanAccepted: false, checkpoint: null, report: docs/task-reports/task-21.md}
 ```
 
 - [ ] **Step 4: 实现状态校验器**
@@ -204,8 +212,8 @@ except Exception as exc:
     raise SystemExit(f"FAIL: invalid YAML: {exc}")
 
 task_states = {"pending", "in_progress", "blocked", "awaiting_acceptance", "completed"}
-verification_states = {"not_run", "pass", "fail", "blocked"}
-gate_states = {"not_run", "pass", "fail", "blocked"}
+verification_states = {"not_run", "pass", "fail", "unable_to_run"}
+task_gate_states = {"not_evaluated", "pass", "fail", "unable_to_evaluate"}
 
 if state.get("schemaVersion") != 1:
     raise SystemExit("FAIL: schemaVersion must be 1")
@@ -219,11 +227,11 @@ for task_id, task in tasks.items():
         raise SystemExit(f"FAIL: Task {task_id} has invalid status")
     if task.get("verificationStatus") not in verification_states:
         raise SystemExit(f"FAIL: Task {task_id} has invalid verificationStatus")
-    if task.get("gateStatus") not in gate_states:
-        raise SystemExit(f"FAIL: Task {task_id} has invalid gateStatus")
+    if task.get("taskGateStatus") not in task_gate_states:
+        raise SystemExit(f"FAIL: Task {task_id} has invalid taskGateStatus")
     if task.get("status") == "completed":
-        if task.get("verificationStatus") != "pass" or task.get("gateStatus") != "pass":
-            raise SystemExit(f"FAIL: completed Task {task_id} must pass verification and gate")
+        if task.get("verificationStatus") != "pass" or task.get("taskGateStatus") != "pass":
+            raise SystemExit(f"FAIL: completed Task {task_id} must pass verification and Task Gate")
         if task.get("humanAccepted") is not True:
             raise SystemExit(f"FAIL: completed Task {task_id} requires human acceptance")
         if not pathlib.Path(task.get("report", "")).is_file():
@@ -243,12 +251,13 @@ if current.get("status") != "pending" and active != [current_id]:
     raise SystemExit("FAIL: current.task must be the unique active Task")
 
 verification = state.get("verification", {})
-gate = state.get("gate", {})
+task_gate = state.get("taskGate", {})
+human_acceptance = state.get("humanAcceptance", {})
 if verification.get("status") != tasks[current_id]["verificationStatus"]:
     raise SystemExit("FAIL: current verification does not match current Task")
-if gate.get("status") != tasks[current_id]["gateStatus"]:
-    raise SystemExit("FAIL: current gate does not match current Task")
-if gate.get("humanAccepted") != tasks[current_id]["humanAccepted"]:
+if task_gate.get("status") != tasks[current_id]["taskGateStatus"]:
+    raise SystemExit("FAIL: current task gate does not match current Task")
+if human_acceptance.get("accepted") != tasks[current_id]["humanAccepted"]:
     raise SystemExit("FAIL: current acceptance does not match current Task")
 
 seen_incomplete = False
